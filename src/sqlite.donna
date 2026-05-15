@@ -1,0 +1,366 @@
+//// SQLite support for Donna.
+////
+//// Backed by the SQLite 3 amalgamation (vendored in `ffi/`).
+////
+//// ```donna
+//// import sqlite
+////
+//// case sqlite.open(":memory:"):
+////   sqlite.Err(e) -> echo e
+////   sqlite.Ok(db) ->
+////     let _ = sqlite.exec(db, "CREATE TABLE users (id INTEGER, name TEXT)")
+////     let _ = sqlite.exec(db, "INSERT INTO users VALUES (1, 'Donna')")
+////     case sqlite.query(db, "SELECT id, name FROM users"):
+////       sqlite.Err(e) -> echo e
+////       sqlite.Ok(rows) -> echo "ok"
+////     sqlite.close(db)
+//// ```
+
+import donna/float
+import donna/list
+import donna/string
+
+/// An opaque handle to an open SQLite database.
+///
+/// Create with `open`, release with `close`.
+pub type Db:
+  Db(Int)
+
+/// An opaque handle to a prepared SQLite statement.
+///
+/// Create with `prepare`, release with `finalize`.
+pub type Stmt:
+  Stmt(Int)
+
+/// A value read from a result column.
+///
+/// ```donna
+/// import sqlite
+///
+/// pub fn describe(v: sqlite.Value) -> String:
+///   case v:
+///     sqlite.Null -> "null"
+///     sqlite.Int(n) -> "int"
+///     sqlite.Float(_) -> "float"
+///     sqlite.Text(s) -> "text: " <> s
+///     sqlite.Blob(_) -> "blob"
+/// ```
+pub type Value:
+  Null
+  Int(Int)
+  Float(Float)
+  Text(String)
+  Blob(String)
+
+/// The result of a SQLite operation.
+pub type Result(a):
+  Ok(a)
+  Err(String)
+
+@external("c", "donna_sqlite_open")
+fn donna_sqlite_open(path: String) -> Int
+
+@external("c", "donna_sqlite_close")
+fn donna_sqlite_close(handle: Int) -> Int
+
+@external("c", "donna_sqlite_last_error")
+fn donna_sqlite_last_error() -> String
+
+@external("c", "donna_sqlite_exec")
+fn donna_sqlite_exec(handle: Int, sql: String) -> Int
+
+@external("c", "donna_sqlite_prepare")
+fn donna_sqlite_prepare(handle: Int, sql: String) -> Int
+
+@external("c", "donna_sqlite_bind_text")
+fn donna_sqlite_bind_text(stmt: Int, idx: Int, value: String) -> Int
+
+@external("c", "donna_sqlite_bind_int")
+fn donna_sqlite_bind_int(stmt: Int, idx: Int, value: Int) -> Int
+
+@external("c", "donna_sqlite_bind_float")
+fn donna_sqlite_bind_float(stmt: Int, idx: Int, value: Float) -> Int
+
+@external("c", "donna_sqlite_bind_null")
+fn donna_sqlite_bind_null(stmt: Int, idx: Int) -> Int
+
+@external("c", "donna_sqlite_step")
+fn donna_sqlite_step(stmt: Int) -> Int
+
+@external("c", "donna_sqlite_column_count")
+fn donna_sqlite_column_count(stmt: Int) -> Int
+
+@external("c", "donna_sqlite_column")
+fn donna_sqlite_column(stmt: Int, idx: Int) -> String
+
+@external("c", "donna_sqlite_column_name")
+fn donna_sqlite_column_name(stmt: Int, idx: Int) -> String
+
+@external("c", "donna_sqlite_finalize")
+fn donna_sqlite_finalize(stmt: Int) -> Int
+
+@external("c", "donna_sqlite_reset")
+fn donna_sqlite_reset(stmt: Int) -> Int
+
+@external("c", "donna_sqlite_last_insert_rowid")
+fn donna_sqlite_last_insert_rowid(handle: Int) -> Int
+
+@external("c", "donna_sqlite_changes")
+fn donna_sqlite_changes(handle: Int) -> Int
+
+/// Open a SQLite database at the given file path.
+///
+/// Pass `":memory:"` for a temporary in-memory database.
+///
+/// ```donna
+/// import sqlite
+///
+/// pub fn example() -> sqlite.Result(sqlite.Db):
+///   sqlite.open(":memory:")
+/// ```
+pub fn open(path: String) -> Result(Db):
+  let handle = donna_sqlite_open(path)
+  case handle == 0:
+    True -> Err(donna_sqlite_last_error())
+    False -> Ok(Db(handle))
+
+/// Close a database and free its resources.
+///
+/// ```donna
+/// import sqlite
+///
+/// pub fn example(db: sqlite.Db) -> Nil:
+///   sqlite.close(db)
+/// ```
+pub fn close(db: Db) -> Nil:
+  let _ = case db:
+    Db(h) -> donna_sqlite_close(h)
+  Nil
+
+/// Execute one or more SQL statements that produce no result rows.
+///
+/// Multiple statements may be separated by semicolons.
+///
+/// ```donna
+/// import sqlite
+///
+/// pub fn example(db: sqlite.Db) -> sqlite.Result(Nil):
+///   sqlite.exec(db, "CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)")
+/// ```
+pub fn exec(db: Db, sql: String) -> Result(Nil):
+  let rc = case db:
+    Db(h) -> donna_sqlite_exec(h, sql)
+  case rc == 0:
+    True -> Ok(Nil)
+    False -> Err(donna_sqlite_last_error())
+
+/// Prepare a SQL statement for execution.
+///
+/// Use `?` placeholders for parameters. Call `finalize` when done.
+///
+/// ```donna
+/// import sqlite
+///
+/// pub fn example(db: sqlite.Db) -> sqlite.Result(sqlite.Stmt):
+///   sqlite.prepare(db, "SELECT name FROM users WHERE id = ?")
+/// ```
+pub fn prepare(db: Db, sql: String) -> Result(Stmt):
+  let handle = case db:
+    Db(h) -> donna_sqlite_prepare(h, sql)
+  case handle == 0:
+    True -> Err(donna_sqlite_last_error())
+    False -> Ok(Stmt(handle))
+
+/// Bind a text value to a prepared statement parameter (1-based index).
+///
+/// ```donna
+/// import sqlite
+///
+/// pub fn example(stmt: sqlite.Stmt) -> sqlite.Result(Nil):
+///   sqlite.bind_text(stmt, 1, "Donna")
+/// ```
+pub fn bind_text(stmt: Stmt, idx: Int, value: String) -> Result(Nil):
+  let rc = case stmt:
+    Stmt(h) -> donna_sqlite_bind_text(h, idx, value)
+  case rc == 0:
+    True -> Ok(Nil)
+    False -> Err(donna_sqlite_last_error())
+
+/// Bind an integer value to a prepared statement parameter (1-based index).
+pub fn bind_int(stmt: Stmt, idx: Int, value: Int) -> Result(Nil):
+  let rc = case stmt:
+    Stmt(h) -> donna_sqlite_bind_int(h, idx, value)
+  case rc == 0:
+    True -> Ok(Nil)
+    False -> Err(donna_sqlite_last_error())
+
+/// Bind a float value to a prepared statement parameter (1-based index).
+pub fn bind_float(stmt: Stmt, idx: Int, value: Float) -> Result(Nil):
+  let rc = case stmt:
+    Stmt(h) -> donna_sqlite_bind_float(h, idx, value)
+  case rc == 0:
+    True -> Ok(Nil)
+    False -> Err(donna_sqlite_last_error())
+
+/// Bind a NULL value to a prepared statement parameter (1-based index).
+pub fn bind_null(stmt: Stmt, idx: Int) -> Result(Nil):
+  let rc = case stmt:
+    Stmt(h) -> donna_sqlite_bind_null(h, idx)
+  case rc == 0:
+    True -> Ok(Nil)
+    False -> Err(donna_sqlite_last_error())
+
+/// Advance a prepared statement to the next row.
+///
+/// Returns `Ok(True)` when a row is available, `Ok(False)` when all rows are
+/// exhausted, and `Err` on error.
+///
+/// ```donna
+/// import sqlite
+///
+/// pub fn example(stmt: sqlite.Stmt) -> sqlite.Result(Bool):
+///   sqlite.step(stmt)
+/// ```
+pub fn step(stmt: Stmt) -> Result(Bool):
+  let rc = case stmt:
+    Stmt(h) -> donna_sqlite_step(h)
+  case rc == 1:
+    True -> Ok(True)
+    False ->
+      case rc == 0:
+        True -> Ok(False)
+        False -> Err(donna_sqlite_last_error())
+
+/// Return the number of columns in the result set.
+pub fn column_count(stmt: Stmt) -> Int:
+  case stmt:
+    Stmt(h) -> donna_sqlite_column_count(h)
+
+/// Read the value of a column in the current row (0-based index).
+///
+/// ```donna
+/// import sqlite
+///
+/// pub fn example(stmt: sqlite.Stmt) -> sqlite.Value:
+///   sqlite.column(stmt, 0)
+/// ```
+pub fn column(stmt: Stmt, idx: Int) -> Value:
+  let wire = case stmt:
+    Stmt(h) -> donna_sqlite_column(h, idx)
+  parse_column(wire)
+
+/// Return the declared name of a column (0-based index).
+pub fn column_name(stmt: Stmt, idx: Int) -> String:
+  case stmt:
+    Stmt(h) -> donna_sqlite_column_name(h, idx)
+
+/// Release a prepared statement and free its resources.
+///
+/// ```donna
+/// import sqlite
+///
+/// pub fn example(stmt: sqlite.Stmt) -> Nil:
+///   sqlite.finalize(stmt)
+/// ```
+pub fn finalize(stmt: Stmt) -> Nil:
+  let _ = case stmt:
+    Stmt(h) -> donna_sqlite_finalize(h)
+  Nil
+
+/// Reset a prepared statement so it can be re-executed.
+///
+/// Bound parameter values are retained. Call `bind_*` again to change them.
+pub fn reset(stmt: Stmt) -> Nil:
+  let _ = case stmt:
+    Stmt(h) -> donna_sqlite_reset(h)
+  Nil
+
+/// Return the rowid of the last successful INSERT.
+pub fn last_insert_rowid(db: Db) -> Int:
+  case db:
+    Db(h) -> donna_sqlite_last_insert_rowid(h)
+
+/// Return the number of rows changed by the last INSERT, UPDATE, or DELETE.
+pub fn changes(db: Db) -> Int:
+  case db:
+    Db(h) -> donna_sqlite_changes(h)
+
+/// Execute a SELECT and collect all rows.
+///
+/// Each row is a `List(Value)` with one entry per column, in column order.
+///
+/// ```donna
+/// import sqlite
+///
+/// pub fn example(db: sqlite.Db) -> sqlite.Result(List(List(sqlite.Value))):
+///   sqlite.query(db, "SELECT id, name FROM users")
+/// ```
+pub fn query(db: Db, sql: String) -> Result(List(List(Value))):
+  case prepare(db, sql):
+    Err(e) -> Err(e)
+    Ok(stmt) ->
+      let result = collect_rows(stmt, [])
+      let _ = finalize(stmt)
+      result
+
+/// Return True when a Result is Ok.
+pub fn is_ok(r: Result(a)) -> Bool:
+  case r:
+    Ok(_) -> True
+    Err(_) -> False
+
+/// Return True when a Result is Err.
+pub fn is_err(r: Result(a)) -> Bool:
+  case r:
+    Ok(_) -> False
+    Err(_) -> True
+
+/// Extract the string from an Ok, or a tagged error string.
+pub fn unwrap_string(r: Result(String)) -> String:
+  case r:
+    Ok(s) -> s
+    Err(e) -> "__err:" <> e
+
+/// Extract the int from an Ok, or 0 on error.
+pub fn unwrap_int(r: Result(Int)) -> Int:
+  case r:
+    Ok(n) -> n
+    Err(_) -> 0
+
+fn collect_rows(stmt: Stmt, acc: List(List(Value))) -> Result(List(List(Value))):
+  case step(stmt):
+    Err(e) -> Err(e)
+    Ok(False) -> Ok(list.reverse(acc))
+    Ok(True) ->
+      let n = column_count(stmt)
+      let row = read_row(stmt, 0, n, [])
+      collect_rows(stmt, [row, ..acc])
+
+fn read_row(stmt: Stmt, idx: Int, count: Int, acc: List(Value)) -> List(Value):
+  case idx >= count:
+    True -> list.reverse(acc)
+    False ->
+      let v = column(stmt, idx)
+      read_row(stmt, idx + 1, count, [v, ..acc])
+
+fn parse_column(wire: String) -> Value:
+  let len = string.length(wire)
+  case len == 0:
+    True -> Null
+    False ->
+      let tag = string.char_at(wire, 0)
+      case tag:
+        78 -> Null
+        73 ->
+          let payload = string.slice(wire, 1, len - 1)
+          Int(string.to_int(payload))
+        70 ->
+          let payload = string.slice(wire, 1, len - 1)
+          Float(float.parse(payload))
+        84 ->
+          let payload = string.slice(wire, 1, len - 1)
+          Text(payload)
+        66 ->
+          let payload = string.slice(wire, 1, len - 1)
+          Blob(payload)
+        _ -> Null

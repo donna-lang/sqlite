@@ -1,0 +1,12 @@
+name = "sqlite"
+version = "0.1.0"
+description = "SQLite support for Donna"
+licences = ["MIT"]
+repository = { type = "github", user = "donna-lang", repo = "sqlite" }
+links = [{ title = "Docs", href = "https://donna-lang.github.io/sqlite/" }]
+
+[dependencies]
+donna = { git = "https://github.com/donna-lang/donna_stdlib", version = ">=0.1.0 and <1.0.0" }
+
+[dev-dependencies]
+unittest = { git = "https://github.com/donna-lang/unittest", version = ">=0.1.0 and <1.0.0" }

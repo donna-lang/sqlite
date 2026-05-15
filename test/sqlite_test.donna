@@ -1,0 +1,324 @@
+import sqlite
+import donna/list
+import unittest/should
+
+pub fn open_close_test() -> String:
+  case sqlite.open(":memory:"):
+    sqlite.Err(e) -> should.fail(e)
+    sqlite.Ok(db) ->
+      let _ = sqlite.close(db)
+      should.pass()
+
+pub fn open_bad_path_test() -> String:
+  case sqlite.open("/no/such/dir/db.sqlite"):
+    sqlite.Err(_) -> should.pass()
+    sqlite.Ok(db) ->
+      let _ = sqlite.close(db)
+      should.fail("should have failed to open")
+
+pub fn exec_create_test() -> String:
+  case sqlite.open(":memory:"):
+    sqlite.Err(e) -> should.fail(e)
+    sqlite.Ok(db) ->
+      let result = sqlite.exec(db, "CREATE TABLE t (id INTEGER, name TEXT)")
+      let _ = sqlite.close(db)
+      case result:
+        sqlite.Err(e) -> should.fail(e)
+        sqlite.Ok(_) -> should.pass()
+
+pub fn exec_error_test() -> String:
+  case sqlite.open(":memory:"):
+    sqlite.Err(e) -> should.fail(e)
+    sqlite.Ok(db) ->
+      let result = sqlite.exec(db, "NOT VALID SQL !!!")
+      let _ = sqlite.close(db)
+      case result:
+        sqlite.Err(_) -> should.pass()
+        sqlite.Ok(_) -> should.fail("bad SQL should have failed")
+
+pub fn insert_and_query_test() -> String:
+  case sqlite.open(":memory:"):
+    sqlite.Err(e) -> should.fail(e)
+    sqlite.Ok(db) ->
+      let _ = sqlite.exec(db, "CREATE TABLE users (id INTEGER, name TEXT)")
+      let _ = sqlite.exec(db, "INSERT INTO users VALUES (1, 'Alice')")
+      let _ = sqlite.exec(db, "INSERT INTO users VALUES (2, 'Bob')")
+      let result = sqlite.query(db, "SELECT id, name FROM users ORDER BY id")
+      let _ = sqlite.close(db)
+      case result:
+        sqlite.Err(e) -> should.fail(e)
+        sqlite.Ok(rows) ->
+          case list.length(rows) == 2:
+            False -> should.fail("expected 2 rows")
+            True -> should.pass()
+
+pub fn row_values_test() -> String:
+  case sqlite.open(":memory:"):
+    sqlite.Err(e) -> should.fail(e)
+    sqlite.Ok(db) ->
+      let _ = sqlite.exec(db, "CREATE TABLE users (id INTEGER, name TEXT)")
+      let _ = sqlite.exec(db, "INSERT INTO users VALUES (7, 'Donna')")
+      let result = sqlite.query(db, "SELECT id, name FROM users")
+      let _ = sqlite.close(db)
+      case result:
+        sqlite.Err(e) -> should.fail(e)
+        sqlite.Ok(rows) ->
+          case rows:
+            [] -> should.fail("no rows")
+            [row, .._] ->
+              case row:
+                [] -> should.fail("empty row")
+                [id, ..rest] ->
+                  case id:
+                    sqlite.Int(n) ->
+                      case rest:
+                        [] -> should.fail("missing name")
+                        [name_val, .._] ->
+                          case name_val:
+                            sqlite.Text(s) ->
+                              should.all([
+                                should.equal_int(n, 7),
+                                should.equal_string(s, "Donna")
+                              ])
+                            _ -> should.fail("name not Text")
+                    _ -> should.fail("id not Int")
+
+pub fn column_types_test() -> String:
+  case sqlite.open(":memory:"):
+    sqlite.Err(e) -> should.fail(e)
+    sqlite.Ok(db) ->
+      let _ = sqlite.exec(db, "CREATE TABLE t (a INTEGER, b REAL, c TEXT, d BLOB, e)")
+      let _ = sqlite.exec(db, "INSERT INTO t VALUES (42, 3.14, 'hello', X'deadbeef', NULL)")
+      let result = sqlite.query(db, "SELECT a, b, c, d, e FROM t")
+      let _ = sqlite.close(db)
+      case result:
+        sqlite.Err(e) -> should.fail(e)
+        sqlite.Ok(rows) ->
+          case rows:
+            [] -> should.fail("no rows")
+            [row, .._] ->
+              check_column_types(row)
+
+pub fn prepare_bind_step_test() -> String:
+  case sqlite.open(":memory:"):
+    sqlite.Err(e) -> should.fail(e)
+    sqlite.Ok(db) ->
+      let _ = sqlite.exec(db, "CREATE TABLE t (id INTEGER, val TEXT)")
+      case sqlite.prepare(db, "INSERT INTO t VALUES (?, ?)"):
+        sqlite.Err(e) ->
+          let _ = sqlite.close(db)
+          should.fail(e)
+        sqlite.Ok(stmt) ->
+          let _ = sqlite.bind_int(stmt, 1, 99)
+          let _ = sqlite.bind_text(stmt, 2, "Donna")
+          let step_result = sqlite.step(stmt)
+          let _ = sqlite.finalize(stmt)
+          let rowid = sqlite.last_insert_rowid(db)
+          let _ = sqlite.close(db)
+          case step_result:
+            sqlite.Err(e) -> should.fail(e)
+            sqlite.Ok(_) -> should.equal_int(rowid, 1)
+
+pub fn bind_null_test() -> String:
+  case sqlite.open(":memory:"):
+    sqlite.Err(e) -> should.fail(e)
+    sqlite.Ok(db) ->
+      let _ = sqlite.exec(db, "CREATE TABLE t (a INTEGER, b TEXT)")
+      case sqlite.prepare(db, "INSERT INTO t VALUES (?, ?)"):
+        sqlite.Err(e) ->
+          let _ = sqlite.close(db)
+          should.fail(e)
+        sqlite.Ok(stmt) ->
+          let _ = sqlite.bind_int(stmt, 1, 1)
+          let _ = sqlite.bind_null(stmt, 2)
+          let _ = sqlite.step(stmt)
+          let _ = sqlite.finalize(stmt)
+          let result = sqlite.query(db, "SELECT b FROM t")
+          let _ = sqlite.close(db)
+          case result:
+            sqlite.Err(e) -> should.fail(e)
+            sqlite.Ok(rows) ->
+              case rows:
+                [] -> should.fail("no rows")
+                [row, .._] ->
+                  case row:
+                    [] -> should.fail("empty row")
+                    [v, .._] ->
+                      case v:
+                        sqlite.Null -> should.pass()
+                        _ -> should.fail("expected Null")
+
+pub fn bind_float_test() -> String:
+  case sqlite.open(":memory:"):
+    sqlite.Err(e) -> should.fail(e)
+    sqlite.Ok(db) ->
+      let _ = sqlite.exec(db, "CREATE TABLE t (v REAL)")
+      case sqlite.prepare(db, "INSERT INTO t VALUES (?)"):
+        sqlite.Err(e) ->
+          let _ = sqlite.close(db)
+          should.fail(e)
+        sqlite.Ok(stmt) ->
+          let _ = sqlite.bind_float(stmt, 1, 2.718)
+          let _ = sqlite.step(stmt)
+          let _ = sqlite.finalize(stmt)
+          let result = sqlite.query(db, "SELECT v FROM t")
+          let _ = sqlite.close(db)
+          case result:
+            sqlite.Err(e) -> should.fail(e)
+            sqlite.Ok(rows) ->
+              case rows:
+                [] -> should.fail("no rows")
+                [row, .._] ->
+                  case row:
+                    [] -> should.fail("empty row")
+                    [v, .._] ->
+                      case v:
+                        sqlite.Float(f) -> should.near_float(f, 2.718, 0.001)
+                        _ -> should.fail("expected Float")
+
+pub fn last_insert_rowid_test() -> String:
+  case sqlite.open(":memory:"):
+    sqlite.Err(e) -> should.fail(e)
+    sqlite.Ok(db) ->
+      let _ = sqlite.exec(db, "CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)")
+      let _ = sqlite.exec(db, "INSERT INTO t (name) VALUES ('first')")
+      let id1 = sqlite.last_insert_rowid(db)
+      let _ = sqlite.exec(db, "INSERT INTO t (name) VALUES ('second')")
+      let id2 = sqlite.last_insert_rowid(db)
+      let _ = sqlite.close(db)
+      should.all([
+        should.equal_int(id1, 1),
+        should.equal_int(id2, 2)
+      ])
+
+pub fn changes_test() -> String:
+  case sqlite.open(":memory:"):
+    sqlite.Err(e) -> should.fail(e)
+    sqlite.Ok(db) ->
+      let _ = sqlite.exec(db, "CREATE TABLE t (id INTEGER, v INTEGER)")
+      let _ = sqlite.exec(db, "INSERT INTO t VALUES (1, 10)")
+      let _ = sqlite.exec(db, "INSERT INTO t VALUES (2, 20)")
+      let _ = sqlite.exec(db, "UPDATE t SET v = 99")
+      let n = sqlite.changes(db)
+      let _ = sqlite.close(db)
+      should.equal_int(n, 2)
+
+pub fn column_name_test() -> String:
+  case sqlite.open(":memory:"):
+    sqlite.Err(e) -> should.fail(e)
+    sqlite.Ok(db) ->
+      let _ = sqlite.exec(db, "CREATE TABLE t (user_id INTEGER, user_name TEXT)")
+      case sqlite.prepare(db, "SELECT user_id, user_name FROM t"):
+        sqlite.Err(e) ->
+          let _ = sqlite.close(db)
+          should.fail(e)
+        sqlite.Ok(stmt) ->
+          let name0 = sqlite.column_name(stmt, 0)
+          let name1 = sqlite.column_name(stmt, 1)
+          let _ = sqlite.finalize(stmt)
+          let _ = sqlite.close(db)
+          should.all([
+            should.equal_string(name0, "user_id"),
+            should.equal_string(name1, "user_name")
+          ])
+
+pub fn reset_and_reuse_test() -> String:
+  case sqlite.open(":memory:"):
+    sqlite.Err(e) -> should.fail(e)
+    sqlite.Ok(db) ->
+      let _ = sqlite.exec(db, "CREATE TABLE t (v INTEGER)")
+      let _ = sqlite.exec(db, "INSERT INTO t VALUES (1)")
+      let _ = sqlite.exec(db, "INSERT INTO t VALUES (2)")
+      case sqlite.prepare(db, "SELECT v FROM t ORDER BY v"):
+        sqlite.Err(e) ->
+          let _ = sqlite.close(db)
+          should.fail(e)
+        sqlite.Ok(stmt) ->
+          let first_run = drain_ints(stmt, [])
+          let _ = sqlite.reset(stmt)
+          let second_run = drain_ints(stmt, [])
+          let _ = sqlite.finalize(stmt)
+          let _ = sqlite.close(db)
+          should.all([
+            should.equal_int(list.length(first_run), 2),
+            should.equal_int(list.length(second_run), 2)
+          ])
+
+pub fn empty_query_test() -> String:
+  case sqlite.open(":memory:"):
+    sqlite.Err(e) -> should.fail(e)
+    sqlite.Ok(db) ->
+      let _ = sqlite.exec(db, "CREATE TABLE t (id INTEGER)")
+      let result = sqlite.query(db, "SELECT id FROM t")
+      let _ = sqlite.close(db)
+      case result:
+        sqlite.Err(e) -> should.fail(e)
+        sqlite.Ok(rows) -> should.equal_int(list.length(rows), 0)
+
+pub fn multiple_statements_exec_test() -> String:
+  case sqlite.open(":memory:"):
+    sqlite.Err(e) -> should.fail(e)
+    sqlite.Ok(db) ->
+      let result = sqlite.exec(db, "CREATE TABLE a (x INTEGER); CREATE TABLE b (y TEXT)")
+      let _ = sqlite.close(db)
+      case result:
+        sqlite.Err(e) -> should.fail(e)
+        sqlite.Ok(_) -> should.pass()
+
+fn check_column_types(row: List(sqlite.Value)) -> String:
+  case row:
+    [] -> should.fail("empty row")
+    [a, ..rest1] ->
+      case rest1:
+        [] -> should.fail("missing b")
+        [b, ..rest2] ->
+          case rest2:
+            [] -> should.fail("missing c")
+            [c, ..rest3] ->
+              case rest3:
+                [] -> should.fail("missing d")
+                [d, ..rest4] ->
+                  case rest4:
+                    [] -> should.fail("missing e")
+                    [e, .._] ->
+                      should.all([
+                        check_int(a, 42),
+                        check_float_near(b, 3.14),
+                        check_text(c, "hello"),
+                        check_blob(d, "deadbeef"),
+                        check_null(e)
+                      ])
+
+fn check_int(v: sqlite.Value, expected: Int) -> String:
+  case v:
+    sqlite.Int(n) -> should.equal_int(n, expected)
+    _ -> should.fail("expected Int")
+
+fn check_float_near(v: sqlite.Value, expected: Float) -> String:
+  case v:
+    sqlite.Float(f) -> should.near_float(f, expected, 0.001)
+    _ -> should.fail("expected Float")
+
+fn check_text(v: sqlite.Value, expected: String) -> String:
+  case v:
+    sqlite.Text(s) -> should.equal_string(s, expected)
+    _ -> should.fail("expected Text")
+
+fn check_blob(v: sqlite.Value, expected: String) -> String:
+  case v:
+    sqlite.Blob(s) -> should.equal_string(s, expected)
+    _ -> should.fail("expected Blob")
+
+fn check_null(v: sqlite.Value) -> String:
+  case v:
+    sqlite.Null -> should.pass()
+    _ -> should.fail("expected Null")
+
+fn drain_ints(stmt: sqlite.Stmt, acc: List(Int)) -> List(Int):
+  case sqlite.step(stmt):
+    sqlite.Err(_) -> list.reverse(acc)
+    sqlite.Ok(False) -> list.reverse(acc)
+    sqlite.Ok(True) ->
+      case sqlite.column(stmt, 0):
+        sqlite.Int(n) -> drain_ints(stmt, [n, ..acc])
+        _ -> drain_ints(stmt, acc)
