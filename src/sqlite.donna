@@ -6,14 +6,14 @@
 //// import sqlite
 ////
 //// case sqlite.open(":memory:"):
-////   sqlite.Err(e) -> echo e
-////   sqlite.Ok(db) ->
-////     let _ = sqlite.exec(db, "CREATE TABLE users (id INTEGER, name TEXT)")
-////     let _ = sqlite.exec(db, "INSERT INTO users VALUES (1, 'Donna')")
-////     case sqlite.query(db, "SELECT id, name FROM users"):
-////       sqlite.Err(e) -> echo e
-////       sqlite.Ok(rows) -> echo "ok"
-////     sqlite.close(db)
+//// sqlite.Err(e) -> echo e
+//// sqlite.Ok(db) ->
+//// let _ = sqlite.exec(db, "CREATE TABLE users (id INTEGER, name TEXT)")
+//// let _ = sqlite.exec(db, "INSERT INTO users VALUES (1, 'Donna')")
+//// case sqlite.query(db, "SELECT id, name FROM users"):
+//// sqlite.Err(e) -> echo e
+//// sqlite.Ok(rows) -> echo "ok"
+//// sqlite.close(db)
 //// ```
 
 import donna/float
@@ -327,7 +327,10 @@ pub fn unwrap_int(r: Result(Int)) -> Int:
     Ok(n) -> n
     Err(_) -> 0
 
-fn collect_rows(stmt: Stmt, acc: List(List(Value))) -> Result(List(List(Value))):
+fn collect_rows(
+  stmt: Stmt,
+  acc: List(List(Value))
+) -> Result(List(List(Value))):
   case step(stmt):
     Err(e) -> Err(e)
     Ok(False) -> Ok(list.reverse(acc))
