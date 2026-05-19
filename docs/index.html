@@ -296,29 +296,99 @@ pub fn read_row(row: List(sqlite.Value)) -&gt; String:
 <h2>API</h2>
 <p>For API Reference visit the generated docs <a href="https://donna-lang.github.io/sqlite/">here</a></p>
 <h2>Types</h2>
-<p>| Type | Description |
-|------|-------------|
-| <code>Db</code> | An open database connection |
-| <code>Stmt</code> | A prepared statement |
-| <code>Value</code> | A column value: <code>Null</code>, <code>Int(Int)</code>, <code>Float(Float)</code>, <code>Text(String)</code>, <code>Blob(String)</code> |
-| <code>Result(a)</code> | <code>Ok(a)</code> or <code>Err(String)</code> |</p>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Db</code></td>
+<td>An open database connection</td>
+</tr>
+<tr>
+<td><code>Stmt</code></td>
+<td>A prepared statement</td>
+</tr>
+<tr>
+<td><code>Value</code></td>
+<td>A column value: <code>Null</code>, <code>Int(Int)</code>, <code>Float(Float)</code>, <code>Text(String)</code>, <code>Blob(String)</code></td>
+</tr>
+<tr>
+<td><code>Result(a)</code></td>
+<td><code>Ok(a)</code> or <code>Err(String)</code></td>
+</tr>
+</tbody>
+</table>
 <h2>Core functions</h2>
-<p>| Function | Description |
-|----------|-------------|
-| <code>open(path)</code> | Open a database; use <code>&quot;:memory:&quot;</code> for in-memory |
-| <code>close(db)</code> | Close the database |
-| <code>exec(db, sql)</code> | Execute SQL with no result rows |
-| <code>query(db, sql)</code> | Execute SELECT and collect all rows |
-| <code>prepare(db, sql)</code> | Prepare a statement with <code>?</code> placeholders |
-| <code>bind_text/int/float/null(stmt, idx, value)</code> | Bind a parameter (1-based) |
-| <code>step(stmt)</code> | Advance to the next row: <code>Ok(True)</code> = row, <code>Ok(False)</code> = done |
-| <code>column(stmt, idx)</code> | Read a column value (0-based) |
-| <code>column_name(stmt, idx)</code> | Read a column name (0-based) |
-| <code>column_count(stmt)</code> | Number of columns |
-| <code>finalize(stmt)</code> | Release a prepared statement |
-| <code>reset(stmt)</code> | Reset a statement for re-execution |
-| <code>last_insert_rowid(db)</code> | Rowid of the last INSERT |
-| <code>changes(db)</code> | Rows affected by the last DML statement |</p>
+<table>
+<thead>
+<tr>
+<th>Function</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>open(path)</code></td>
+<td>Open a database; use <code>&quot;:memory:&quot;</code> for in-memory</td>
+</tr>
+<tr>
+<td><code>close(db)</code></td>
+<td>Close the database</td>
+</tr>
+<tr>
+<td><code>exec(db, sql)</code></td>
+<td>Execute SQL with no result rows</td>
+</tr>
+<tr>
+<td><code>query(db, sql)</code></td>
+<td>Execute SELECT and collect all rows</td>
+</tr>
+<tr>
+<td><code>prepare(db, sql)</code></td>
+<td>Prepare a statement with <code>?</code> placeholders</td>
+</tr>
+<tr>
+<td><code>bind_text/int/float/null(stmt, idx, value)</code></td>
+<td>Bind a parameter (1-based)</td>
+</tr>
+<tr>
+<td><code>step(stmt)</code></td>
+<td>Advance to the next row: <code>Ok(True)</code> = row, <code>Ok(False)</code> = done</td>
+</tr>
+<tr>
+<td><code>column(stmt, idx)</code></td>
+<td>Read a column value (0-based)</td>
+</tr>
+<tr>
+<td><code>column_name(stmt, idx)</code></td>
+<td>Read a column name (0-based)</td>
+</tr>
+<tr>
+<td><code>column_count(stmt)</code></td>
+<td>Number of columns</td>
+</tr>
+<tr>
+<td><code>finalize(stmt)</code></td>
+<td>Release a prepared statement</td>
+</tr>
+<tr>
+<td><code>reset(stmt)</code></td>
+<td>Reset a statement for re-execution</td>
+</tr>
+<tr>
+<td><code>last_insert_rowid(db)</code></td>
+<td>Rowid of the last INSERT</td>
+</tr>
+<tr>
+<td><code>changes(db)</code></td>
+<td>Rows affected by the last DML statement</td>
+</tr>
+</tbody>
+</table>
 <h2>Licence</h2>
 <p>MIT</p>
 </div></main></div>
